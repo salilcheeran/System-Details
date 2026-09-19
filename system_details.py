@@ -19,6 +19,45 @@ ACCENT = "#70d6c0"
 WARNING = "#f5c36a"
 
 
+def build_tool_icon() -> tk.PhotoImage:
+    icon = tk.PhotoImage(width=64, height=64)
+
+    for y in range(64):
+        for x in range(64):
+            icon.put("#112a35", (x, y))
+
+    for y in range(14, 50):
+        for x in range(18, 52):
+            if 20 <= x <= 48 and 24 <= y <= 39:
+                icon.put("#e9f5ff", (x, y))
+
+    for y in range(64):
+        for x in range(64):
+            dx = x - 45
+            dy = y - 16
+            if dx * dx + dy * dy <= 13 * 13:
+                icon.put("#e9f5ff", (x, y))
+
+    for y in range(28, 46):
+        for x in range(12, 52):
+            if 12 <= x <= 22 and 28 <= y <= 46:
+                icon.put("#e9f5ff", (x, y))
+
+    for y in range(17, 47):
+        for x in range(18, 56):
+            if 30 <= x <= 52 and 16 <= y <= 20:
+                icon.put("#70d6c0", (x, y))
+
+    for y in range(64):
+        for x in range(64):
+            dx = x - 45
+            dy = y - 16
+            if dx * dx + dy * dy <= 6 * 6:
+                icon.put("#112a35", (x, y))
+
+    return icon
+
+
 class MemoryStatus(ctypes.Structure):
     _fields_ = [
         ("dwLength", ctypes.c_ulong),
@@ -85,6 +124,10 @@ class SystemDetailsApp:
         self.root.minsize(680, 400)
         self.root.configure(bg=APP_BG)
         self.root.resizable(False, False)
+        try:
+            self.root.iconphoto(True, build_tool_icon())
+        except tk.TclError:
+            pass
         self.previous_cpu: tuple[int, int, int, int] | None = None
         self.view_title = tk.StringVar(value="Overview")
         self.status_text = tk.StringVar(value="Ready")
