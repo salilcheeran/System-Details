@@ -8,9 +8,11 @@ import math
 import os
 import platform
 import shutil
-import subprocess
 import tkinter as tk
+import urllib.error
+import urllib.request
 from datetime import datetime
+from typing import Any
 
 
 APP_BG = "#101820"
@@ -76,6 +78,72 @@ class MemoryStatus(ctypes.Structure):
 
 def bytes_to_gb(value: int) -> str:
     return f"{value / (1024 ** 3):.1f} GB"
+
+
+def parse_isp_payload(payload: dict[str, Any]) -> tuple[str, str]:
+    ip_value = payload.get("ip") or "Unknown"
+    org_value = payload.get("org") or payload.get("isp") or "Unknown ISP"
+    city_value = payload.get("city") or "Unknown city"
+    region_value = payload.get("region") or payload.get("regionName") or "Unknown region"
+    country_value = payload.get("country") or "Unknown"
+    return f"{org_value} ({ip_value})", f"{city_value}, {region_value}, {country_value}"
+
+
+def format_network_speed(raw_speed: dict[str, float]) -> tuple[str, str]:
+    download_speed = raw_speed.get("Download", 0.0)
+    upload_speed = raw_speed.get("Upload", 0.0)
+    return f"{download_speed:.2f} MB/s", f"{upload_speed:.2f} MB/s"
+
+
+def fetch_json(url: str) -> dict[str, Any]:
+    request = urllib.request.Request(url, headers={"User-Agent": "SystemDetails/1.0"})
+    with urllib.request.urlopen(request, timeout=8) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_isp_details() -> tuple[str, str]:
+    try:
+        payload = fetch_json("https://ipinfo.io/json")
+        return parse_isp_payload(payload)
+    except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return "ISP details unavailable", "Network lookup failed"
+
+
+def measure_network_speeds() -> tuple[str, str]:
+    def download_measurement() -> float:
+        start = time.perf_counter()
+        try:
+            request = urllib.request.Request(
+                "https://speed.cloudflare.com/__down?bytes=5000000",
+                headers={"User-Agent": "SystemDetails/1.0"},
+            )
+            with urllib.request.urlopen(request, timeout=20) as response:
+                downloaded = 0
+                while chunk := response.read(65536):
+                    downloaded += len(chunk)
+            elapsed = max(time.perf_counter() - start, 0.1)
+            return downloaded / elapsed / (1024 * 1024)
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return 0.0
+
+    def upload_measurement() -> float:
+        payload = b"x" * 1500000
+        start = time.perf_counter()
+        try:
+            request = urllib.request.Request(
+                "https://httpbin.org/post",
+                data=payload,
+                headers={"Content-Type": "application/octet-stream", "User-Agent": "SystemDetails/1.0"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=20) as response:
+                response.read(1024)
+            elapsed = max(time.perf_counter() - start, 0.1)
+            return len(payload) / elapsed / (1024 * 1024)
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return 0.0
+
+    return format_network_speed({"Download": download_measurement(), "Upload": upload_measurement()})
 
 
 def memory_details() -> tuple[int, int, int]:
@@ -220,7 +288,6 @@ class SystemDetailsApp:
         footer.pack(fill="x", padx=22, pady=(0, 18))
         self._button(footer, "Configuration", self._show_configuration).pack(side="left", expand=True, fill="x", padx=(0, 5))
         self._button(footer, "Performance", self._show_performance).pack(side="left", expand=True, fill="x", padx=5)
-        self._button(footer, "Application Usage", self._show_application_usage).pack(side="left", expand=True, fill="x", padx=5)
         self._button(footer, "Exit", self.root.destroy, accent=False).pack(side="left", expand=True, fill="x", padx=(5, 0))
 
     def _draw_gear(self, parent: tk.Widget) -> None:
@@ -282,10 +349,6 @@ class SystemDetailsApp:
         self._clear_content("Live Performance")
         self._render_performance()
 
-    def _show_application_usage(self) -> None:
-        self._clear_content("Application Usage")
-        self._render_application_usage()
-
     def _render_performance(self) -> None:
         load, _, _ = memory_details()
         cpu, self.previous_cpu = cpu_percent(self.previous_cpu)
@@ -295,12 +358,6 @@ class SystemDetailsApp:
         self._line("Storage", f"{used_disk:.0f}% used of {total_disk}")
         self._line("Updated", datetime.now().strftime("%H:%M:%S"))
         self.status_text.set("Live readings refresh every second")
-
-    def _render_application_usage(self) -> None:
-        for name, version in get_open_ui_applications():
-            self._line(name, version)
-        self._line("Updated", datetime.now().strftime("%H:%M:%S"))
-        self.status_text.set("Showing currently open UI applications and their versions")
 
     def _refresh_performance(self) -> None:
         if self.view_title.get() == "Live Performance":
