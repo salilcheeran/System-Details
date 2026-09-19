@@ -8,7 +8,6 @@ import math
 import os
 import platform
 import shutil
-import time
 import tkinter as tk
 import urllib.error
 import urllib.request
@@ -187,6 +186,54 @@ def drive_details() -> tuple[str, float]:
     return bytes_to_gb(usage.total), used
 
 
+def normalize_application_version(version: str | None) -> str:
+    cleaned = (version or "").strip()
+    return cleaned if cleaned else "Unknown"
+
+
+def parse_ui_applications_payload(payload: object) -> list[tuple[str, str]]:
+    entries = payload if isinstance(payload, list) else [payload]
+    rows: list[tuple[str, str]] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("Name") or item.get("name") or item.get("ProcessName") or item.get("processName") or "Unknown process")
+        version = normalize_application_version(
+            item.get("Version") or item.get("version") or item.get("FileVersion") or item.get("fileVersion")
+        )
+        rows.append((name, version))
+    return rows if rows else [("No UI applications detected.", "Unknown")]
+
+
+def get_open_ui_applications() -> list[tuple[str, str]]:
+    if os.name != "nt":
+        return [("Application tracking is available only on Windows.", "-")]
+
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object { $p = $_; $version = 'Unknown'; try { $path = $p.Path; if ($path) { $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileVersion } } catch { } ; [pscustomobject]@{ Name = $p.ProcessName; Version = $version } } | ConvertTo-Json -Compress",
+    ]
+
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20, check=False)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return [("Unable to read running UI apps.", "-")]
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return [("No UI applications detected.", "Unknown")]
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return [("Unable to parse running UI apps.", "-")]
+
+    return parse_ui_applications_payload(data)
+
+
 class SystemDetailsApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -241,7 +288,6 @@ class SystemDetailsApp:
         footer.pack(fill="x", padx=22, pady=(0, 18))
         self._button(footer, "Configuration", self._show_configuration).pack(side="left", expand=True, fill="x", padx=(0, 5))
         self._button(footer, "Performance", self._show_performance).pack(side="left", expand=True, fill="x", padx=5)
-        self._button(footer, "Network", self._show_network).pack(side="left", expand=True, fill="x", padx=5)
         self._button(footer, "Exit", self.root.destroy, accent=False).pack(side="left", expand=True, fill="x", padx=(5, 0))
 
     def _draw_gear(self, parent: tk.Widget) -> None:
@@ -303,10 +349,6 @@ class SystemDetailsApp:
         self._clear_content("Live Performance")
         self._render_performance()
 
-    def _show_network(self) -> None:
-        self._clear_content("Network")
-        self._render_network()
-
     def _render_performance(self) -> None:
         load, _, _ = memory_details()
         cpu, self.previous_cpu = cpu_percent(self.previous_cpu)
@@ -316,16 +358,6 @@ class SystemDetailsApp:
         self._line("Storage", f"{used_disk:.0f}% used of {total_disk}")
         self._line("Updated", datetime.now().strftime("%H:%M:%S"))
         self.status_text.set("Live readings refresh every second")
-
-    def _render_network(self) -> None:
-        provider, location = fetch_isp_details()
-        download_speed, upload_speed = measure_network_speeds()
-        self._line("Provider", provider)
-        self._line("Location", location)
-        self._line("Download", download_speed)
-        self._line("Upload", upload_speed)
-        self._line("Updated", datetime.now().strftime("%H:%M:%S"))
-        self.status_text.set("ISP and live throughput refreshed on demand")
 
     def _refresh_performance(self) -> None:
         if self.view_title.get() == "Live Performance":
