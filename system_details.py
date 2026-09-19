@@ -100,6 +100,15 @@ class SystemDetailsApp:
         tk.Label(title_box, text="SYSTEM DETAILS", font=("Segoe UI", 16, "bold"), fg=TEXT, bg=APP_BG).pack(anchor="w")
         tk.Label(title_box, textvariable=self.view_title, font=("Segoe UI", 9), fg=ACCENT, bg=APP_BG).pack(anchor="w")
 
+        developer_label = tk.Label(
+            header,
+            text="Developed by: Salil Cheeran",
+            font=("Segoe UI", 9, "bold"),
+            fg=ACCENT,
+            bg=APP_BG,
+        )
+        developer_label.pack(side="right", anchor="n", pady=(6, 0))
+
         content_shell = tk.Frame(self.root, bg=APP_BG)
         content_shell.pack(fill="both", expand=True, padx=22, pady=(0, 14))
         self.content_canvas = tk.Canvas(content_shell, bg=PANEL_BG, highlightthickness=1, highlightbackground="#2a3d45")
