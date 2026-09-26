@@ -220,7 +220,7 @@ class SystemDetailsApp:
         footer.pack(fill="x", padx=22, pady=(0, 18))
         self._button(footer, "Configuration", self._show_configuration).pack(side="left", expand=True, fill="x", padx=(0, 5))
         self._button(footer, "Performance", self._show_performance).pack(side="left", expand=True, fill="x", padx=5)
-        self._button(footer, "Application Usage", self._show_application_usage).pack(side="left", expand=True, fill="x", padx=5)
+        self._button(footer, "Application Usage", self._show_application_usage, color=WARNING).pack(side="left", expand=True, fill="x", padx=5)
         self._button(footer, "Exit", self.root.destroy, accent=False).pack(side="left", expand=True, fill="x", padx=(5, 0))
 
     def _draw_gear(self, parent: tk.Widget) -> None:
@@ -232,10 +232,12 @@ class SystemDetailsApp:
         canvas.create_oval(10, 10, 34, 34, fill=ACCENT, outline=ACCENT)
         canvas.create_oval(17, 17, 27, 27, fill=APP_BG, outline=APP_BG)
 
-    def _button(self, parent: tk.Widget, label: str, command: object, accent: bool = True) -> tk.Button:
+    def _button(self, parent: tk.Widget, label: str, command: object, accent: bool = True,
+                color: str | None = None) -> tk.Button:
+        background = color or (ACCENT if accent else "#263840")
         return tk.Button(parent, text=label, command=command, font=("Segoe UI", 9, "bold"), relief="flat", bd=0,
-                         padx=6, pady=8, bg=ACCENT if accent else "#263840", fg=APP_BG if accent else TEXT,
-                         activebackground="#9ae8d7" if accent else "#344a53", activeforeground=APP_BG,
+                         padx=6, pady=8, bg=background, fg=APP_BG if accent else TEXT,
+                         activebackground=background, activeforeground=APP_BG,
                          cursor="hand2")
 
     def _clear_content(self, title: str) -> None:
